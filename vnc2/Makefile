@@ -37,6 +37,7 @@ CFLAGS= -c -d $(DEBUG) -I $(REAL_ROOT)/include/kernel -I $(REAL_ROOT)/include/dr
 AFLAGS= -d $(DEBUG)
 LFLAGS= -d $(DEBUG) 
 
+PATH:=$(PATH);$(REAL_ROOT)/tools
 
 CC=$(REAL_ROOT)/tools/VinC.exe
 
