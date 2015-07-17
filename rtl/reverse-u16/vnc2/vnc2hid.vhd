@@ -134,6 +134,8 @@ BEGIN
 							reset_button_int <= '0';
 							zpu_ctl_esc_ret_rldu_int <= (others=>'0');
 							fkeys_int <= (others=>'0');			
+							joy1_int_n <= (others=>'1');
+							joy2_int_n <= (others=>'1');
 						when x"4" => 
 							joy_int_n_new <= (others=>'1');
 						when others => null;
