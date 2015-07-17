@@ -25,7 +25,6 @@
 
 #define VOS_NUMBER_DEVICES 6
 
-
 #ifdef _VDEBUG
 #define DEBUG 1
 #endif
@@ -39,20 +38,12 @@
 
 void firmware(uint8 hostId, uint8 hidId);
 
-VOS_HANDLE hUSBHOST_1; // USB Host Port 1
-VOS_HANDLE hUSBHOST_2; // USB Host Port 2
 VOS_HANDLE hUART; // UART Interface Driver
 VOS_HANDLE hGPIO_PORT_A; // GPIO Port A Driver
-VOS_HANDLE hUSBHOST_HID_1; // Connects to a HIDdevice on the USB Host Interface
-VOS_HANDLE hUSBHOST_HID_2; // Connects to a HIDdevice on the USB Host Interface
 
 #define MAX_STRING_LEN		 255
 uint8 buf[64];
 uint8 buf2[64];
-
-#ifdef DEBUG
-char *eol = "\r\n";
-#endif
 
 vos_mutex_t rxLock;
 vos_mutex_t spiLock;
@@ -60,6 +51,9 @@ int connectedCount = 0;
 int speed=9600;
 
 #ifdef DEBUG
+
+char *eol = "\r\n";
+
 void message(char *str)
 {
 	int length = 0;
@@ -117,6 +111,14 @@ void iomux_setup(void)
 	vos_iomux_define_output(23, IOMUX_OUT_UART_TXD);
 	// UART_RXD to pin 24 as Input.
 	vos_iomux_define_input(24, IOMUX_IN_UART_RXD);
+	// GPIO_Port_A_1 to pin 12 as Input.
+	vos_iomux_define_input(12, IOMUX_IN_GPIO_PORT_A_1);
+	// UART_RTS_N to pin 25 as Output.
+	vos_iomux_define_output(25, IOMUX_OUT_UART_RTS_N);
+	// UART_CTS_N to pin 26 as Input.
+	vos_iomux_define_input(26, IOMUX_IN_UART_CTS_N);
+	vos_iocell_set_config(26, 0, 0, 0, 1);
+
 }
 
 /* Main code - entry point to firmware */
@@ -149,6 +151,12 @@ void main(void)
 	uart_iocb.ioctl_code = VOS_IOCTL_COMMON_ENABLE_DMA;
 	uart_iocb.set.param = DMA_ACQUIRE_AS_REQUIRED;
 	vos_dev_ioctl(hUART, &uart_iocb);
+	
+	// UART set baud rate
+	uart_iocb.ioctl_code = VOS_IOCTL_UART_SET_BAUD_RATE;
+	uart_iocb.set.uart_baud_rate = 9600;
+	vos_dev_ioctl(hUART, &uart_iocb);
+	speed = 9600;
 	
 	// Initialise GPIO A
 	gpioContextA.port_identifier = GPIO_PORT_A;
@@ -318,8 +326,6 @@ void firmware(uint8 hostId, uint8 hidId)
 			number(hostId);
 			message(eol);
 #endif			
-			connectedCount++;			
-			led(ON);
 			
 			hUSBHOST_HID = hid_attach(hUSBHOST, hidId);
 			if (hUSBHOST_HID == NULL)
@@ -329,7 +335,7 @@ void firmware(uint8 hostId, uint8 hidId)
 				number(status);
 				message(eol);
 #endif				
-				break;
+				continue;
 			}
 
 
@@ -347,7 +353,7 @@ void firmware(uint8 hostId, uint8 hidId)
 				number(status);
 				message(eol);
 #endif				
-				break;
+				continue;
 			}
 #ifdef DEBUG			
 			{
@@ -374,7 +380,7 @@ void firmware(uint8 hostId, uint8 hidId)
 #ifdef DEBUG			
 				message("Unrecognized device\r\n");				
 #endif				
-				break;
+				continue;
 			}
 			deviceType = localBuf[3];
 
@@ -388,12 +394,15 @@ void firmware(uint8 hostId, uint8 hidId)
 				number(status);
 				message(eol);
 #endif				
-				break;
+				continue;
 			}
 			reportLen = (uint8) hid_iocb.Length; 
 						
 			if (status == USBHOSTHID_OK)
 			{
+					connectedCount++;			
+					led(ON);
+					
 					while (1)
 					{
 						if (vos_dev_read(hUSBHOST_HID, localBuf, (uint16)reportLen, &num_read) == USBHOSTHID_OK)
@@ -422,6 +431,19 @@ void firmware(uint8 hostId, uint8 hidId)
 								// send port id in first bit and deviceType in remaining
 								number(hostId << 7 | deviceType);								
 								// number(reportLen);
+							}
+							else
+							{
+								common_ioctl_cb_t uart_iocb;
+								if(speed == 115200)
+								{
+									// UART set baud rate
+									uart_iocb.ioctl_code = VOS_IOCTL_UART_SET_BAUD_RATE;
+									uart_iocb.set.uart_baud_rate = 9600;
+									vos_dev_ioctl(hUART, &uart_iocb);
+									speed = 9600;
+								}								
+								
 							}
 							
 							for (byteCount = 0; byteCount < num_read; byteCount++)
