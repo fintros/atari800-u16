@@ -92,6 +92,14 @@ architecture rtl of atari800core_u16 is
    signal VIDEO_HS            : std_logic;
    signal VIDEO_BLANK            : std_logic;
 
+   signal VIDEO_B_RAW         : std_logic_vector(7 downto 0);
+   signal VIDEO_VS_RAW        : std_logic;
+   signal VIDEO_HS_RAW        : std_logic;
+   signal VIDEO_CS_RAW        : std_logic;
+   signal VIDEO_BLANK_RAW     : std_logic;
+	
+
+	
    signal PAL                 : std_logic := '0';
 
 	
@@ -157,12 +165,20 @@ architecture rtl of atari800core_u16 is
 	signal ZPU_CTL_ESC_RET_RLDU: std_logic_vector(5 downto 0);
 
 	
+		-- scandoubler
+	signal half_scandouble_enable_reg : std_logic;
+	signal half_scandouble_enable_next : std_logic;
+	signal scanlines_reg : std_logic;
+	signal scanlines_next : std_logic;
+	
    alias  PAUSE_ATARI         : std_logic                    is ZPU_OUT1(0);
    alias  RESET_ATARI         : std_logic                    is ZPU_OUT1(1);
    alias  SPEED_6502          : std_logic_vector(5 downto 0) is ZPU_OUT1(7 downto 2);
    alias  EMULATED_CARTRIDGE_SELECT : std_logic_vector(5 downto 0) is ZPU_OUT1(22 downto 17);
    alias  FREEZER_ENABLE      : std_logic                    is ZPU_OUT1(25);
    alias  RAM_SELECT          : std_logic_vector(2 downto 0) is ZPU_OUT1(10 downto 8);
+	
+	
 	
 	--signal debug1: std_logic;
 	--signal debug2: std_logic;
@@ -194,7 +210,7 @@ port map (
 	c0			=> ATARI_CLK,			-- 56.75
 	c1			=> CLK_SDRAM_IN,		-- 113.5
 	c2			=> SDRAM_CLK,			-- 113.5 (shifted)
-	c3			=> CLK_HDMI_IN,		-- 141.875
+	c3			=> CLK_HDMI_IN,		-- 283.750 -- 141.875
 	c4			=> CLK_PIXEL_IN,		-- 28.375
 	locked	=> PLL_LOCKED
 );
@@ -221,11 +237,64 @@ port map(
 	--DEBUG2 => debug2
 	);
 
+-- SCANDOUBLER	
+
+	process(ATARI_CLK,reset)
+	begin
+		if (reset = '1') then
+			half_scandouble_enable_reg <= '0';
+			scanlines_reg <= '0';
+		elsif (ATARI_CLK'event and ATARI_CLK='1') then
+			half_scandouble_enable_reg <= half_scandouble_enable_next;
+			scanlines_reg <= scanlines_next;
+		end if;
+	end process;
+
+	half_scandouble_enable_next <= not(half_scandouble_enable_reg);
+	scanlines_next <= scanlines_reg xor '0'; --(not(ps2_keys(16#11#)) and ps2_keys_next(16#11#)); -- left alt
+
+	scandoubler1: entity work.scandoubler_hdmi
+	GENERIC MAP
+	(
+		video_bits=>8
+	)
+	PORT MAP
+	( 
+		CLK => ATARI_CLK,
+		RESET_N => not reset,
+		
+		VGA => '1',
+		COMPOSITE_ON_HSYNC => '0',
+
+		colour_enable => half_scandouble_enable_reg,
+		doubled_enable => '1',
+		scanlines_on => scanlines_reg,
+		
+		-- GTIA interface
+		pal => PAL,
+		colour_in => VIDEO_B_RAW,
+		vsync_in => VIDEO_VS_RAW,
+		hsync_in => VIDEO_HS_RAW,
+		csync_in => VIDEO_CS_RAW,
+		blank_in => VIDEO_BLANK_RAW,
+		
+		-- TO TV...
+		R => VIDEO_R,
+		G => VIDEO_G,
+		B => VIDEO_B,
+		
+		VSYNC => VIDEO_VS,
+		HSYNC => VIDEO_HS,
+		BLANK => VIDEO_BLANK
+	);
+
+	
+	
 -- HDMI
 hdmi_out: entity work.hdmi
 port map(
 	CLK_DVI			=> CLK_HDMI_IN,
-	CLK_PIXEL		=> CLK_PIXEL_IN,
+	CLK_PIXEL		=> ATARI_CLK,
 	R			=> VIDEO_R,
 	G			=> VIDEO_G,
 	B			=> VIDEO_B,
@@ -238,6 +307,8 @@ port map(
 	TMDS_D2			=> HDMI_D2,
 	TMDS_CLK		=> HDMI_CLK);
 
+
+	
 
 	
 -- Delta-Sigma
@@ -262,20 +333,20 @@ generic map(
    CYCLE_LENGTH               => 32,
    INTERNAL_ROM               => 1, -- 0
    INTERNAL_RAM               => 0, -- 16384
-   PALETTE                    => 1,
+   PALETTE                    => 0, -- 1
    VIDEO_BITS                 => 8)
 	
 port map(
    CLK                        => ATARI_CLK,
    RESET_N                    => not cpu_reset,
-
-   VIDEO_VS                   => VIDEO_VS,
-   VIDEO_HS                   => VIDEO_HS,
-   VIDEO_CS                   => OPEN,
-   VIDEO_B                    => VIDEO_B,
-   VIDEO_G                    => VIDEO_G,
-   VIDEO_R                    => VIDEO_R,
-   VIDEO_BLANK                => VIDEO_BLANK,
+	
+   VIDEO_VS                   => VIDEO_VS_RAW,
+   VIDEO_HS                   => VIDEO_HS_RAW,
+   VIDEO_CS                   => VIDEO_CS_RAW,
+   VIDEO_B                    => VIDEO_B_RAW,
+   VIDEO_G                    => OPEN, -- VIDEO_G,
+   VIDEO_R                    => OPEN, --VIDEO_R,
+   VIDEO_BLANK                => VIDEO_BLANK_RAW,
    VIDEO_BURST                => OPEN,
    VIDEO_START_OF_FIELD       => OPEN,
    VIDEO_ODD_LINE             => OPEN,
@@ -330,10 +401,10 @@ port map(
 	
 	
 sdram_adaptor : entity work.sdram_statemachine
-GENERIC MAP(ADDRESS_WIDTH => 22,
+GENERIC MAP(ADDRESS_WIDTH => 24,
 			AP_BIT => 10,
-			COLUMN_WIDTH => 8,
-			ROW_WIDTH => 12
+			COLUMN_WIDTH => 9,
+			ROW_WIDTH => 13
 			)
 PORT MAP(CLK_SYSTEM => ATARI_CLK,
 		 CLK_SDRAM => CLK_SDRAM_IN,
@@ -345,7 +416,7 @@ PORT MAP(CLK_SYSTEM => ATARI_CLK,
 		 WORD_ACCESS => SDRAM_WIDTH_16BIT_ACCESS,
 		 LONGWORD_ACCESS => SDRAM_WIDTH_32BIT_ACCESS,
 		 REFRESH => SDRAM_REFRESH,
-		 ADDRESS_IN => SDRAM_ADDR,
+		 ADDRESS_IN => "00"&SDRAM_ADDR,
 		 DATA_IN => SDRAM_DI,
 		 SDRAM_DQ => SDRAM_DQ,
 		 COMPLETE => SDRAM_REQUEST_COMPLETE,
@@ -359,11 +430,11 @@ PORT MAP(CLK_SYSTEM => ATARI_CLK,
 		 SDRAM_ldqm => SDRAM_DQML,
 		 SDRAM_udqm => SDRAM_DQMH,
 		 DATA_OUT => SDRAM_DO,
-		 SDRAM_ADDR => SDRAM_A(11 downto 0),
+		 SDRAM_ADDR => SDRAM_A(12 downto 0),
 		 reset_client_n => SDRAM_RESET_N
 		 );
 		 
-SDRAM_A(12) <= '0';
+--SDRAM_A(12) <= '0';
 
 zpu: entity work.zpucore
 	GENERIC MAP
