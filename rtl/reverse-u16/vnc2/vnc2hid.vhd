@@ -32,9 +32,8 @@ PORT
 	
 	JOY2_n: OUT std_logic_vector(4 downto 0);
 
-	ZPU_CTL_ESC_RET_RLDU: OUT std_logic_vector(5 downto 0);
-	
-	FREEZER_ACTIVATE : OUT STD_LOGIC;
+	CTL_KEYS: OUT std_logic_vector(8 downto 0); -- SCRLOCK(8) & LGUI (7) & LALT (6) & ESC (5) & RET (4) & Right (3) & Left (2) & Down (1) & Up (0)
+	CTL_KEYS_PREV: OUT std_logic_vector(8 downto 0);
 	
 	NEW_VNC2_MODE_N:  OUT STD_LOGIC;
 	
@@ -52,7 +51,6 @@ ARCHITECTURE vhdl OF vnc2hid IS
 	signal consol_option_int : std_logic;
 	signal reset_button_int : std_logic;
 	signal fkeys_int : std_logic_vector(11 downto 0);
-	signal freezer_activate_int : std_logic;
 	signal atari_keyboard : std_logic_vector(63 downto 0);
 	signal shift_pressed :  std_logic;
 	signal break_pressed :  std_logic;
@@ -61,7 +59,8 @@ ARCHITECTURE vhdl OF vnc2hid IS
 	signal joy1_int_n: std_logic_vector(4 downto 0);
 	signal joy2_int_n: std_logic_vector(4 downto 0);
 	signal joy_int_n_new: std_logic_vector(4 downto 0);
-	signal zpu_ctl_esc_ret_rldu_int: std_logic_vector(5 downto 0);
+	signal ctl_keys_int: std_logic_vector(8 downto 0);
+	signal ctl_keys_prev_int: std_logic_vector(8 downto 0);
 
 	signal debug: std_logic;
 	signal debug_2: std_logic;
@@ -106,7 +105,8 @@ BEGIN
 					joy1_int_n <= (others=>'1');
 					joy2_int_n <= (others=>'1');
 					joy_int_n_new <= (others=>'1');
-				   zpu_ctl_esc_ret_rldu_int <= (others=>'0');
+				   ctl_keys_int <= (others=>'0');
+					ctl_keys_prev_int <= (others=>'0');
 					fkeys_int <= (others=>'0');	
 					byte_count <= 0;
 					port_selector <= '0';
@@ -132,7 +132,8 @@ BEGIN
 							consol_select_int <= '0';
 							consol_option_int <= '0';
 							reset_button_int <= '0';
-							zpu_ctl_esc_ret_rldu_int <= (others=>'0');
+							ctl_keys_prev_int <= ctl_keys_int;
+							ctl_keys_int <= (others=>'0');
 							fkeys_int <= (others=>'0');			
 							joy1_int_n <= (others=>'1');
 							joy2_int_n <= (others=>'1');
@@ -165,7 +166,9 @@ BEGIN
 								control_pressed  <= keyb_data(4); -- CTRL
 								shift_pressed <= keyb_data(1) or keyb_data(5); -- Shifts
 								atari_keyboard(39) <= keyb_data(6); -- Right Alt (Inv)				
-								joy1_int_n(4) <= not keyb_data(0); -- Left Control (Fire)						
+								joy1_int_n(4) <= not keyb_data(0); -- Left Control (Fire)	
+								ctl_keys_int(6) <= keyb_data(2); -- Left Alt 
+								ctl_keys_int(7) <= keyb_data(3); -- Left Gui 
 						else				
 							case keyb_data is
 
@@ -183,7 +186,7 @@ BEGIN
 								when X"13" => atari_keyboard(10) <= '1'; -- P
 								when X"18" => atari_keyboard(11) <= '1'; -- U
 								when X"28" => atari_keyboard(12) <= '1'; -- ENTER
-										zpu_ctl_esc_ret_rldu_int(4) <= '1';
+										ctl_keys_int(4) <= '1';
 								when X"0c" => atari_keyboard(13) <= '1'; -- I
 								when X"2f" => atari_keyboard(14) <= '1'; -- -
 								when X"30" => atari_keyboard(15) <= '1'; -- =
@@ -203,7 +206,7 @@ BEGIN
 								when X"20" => atari_keyboard(26) <= '1'; -- 3
 								when X"23" => atari_keyboard(27) <= '1'; -- 6
 								when X"29" => atari_keyboard(28) <= '1'; -- Esc
-										zpu_ctl_esc_ret_rldu_int(5) <= '1';
+										ctl_keys_int(5) <= '1';
 								when X"22" => atari_keyboard(29) <= '1'; -- 5
 								when X"1f" => atari_keyboard(30) <= '1'; -- 2
 								when X"1e" => atari_keyboard(31) <= '1'; -- 1
@@ -247,13 +250,13 @@ BEGIN
 								
 								-- Cursor keys
 								when X"4f" => joy1_int_n(3) <= '0'; -- Right
-										zpu_ctl_esc_ret_rldu_int(3) <= '1';
+										ctl_keys_int(3) <= '1';
 								when X"50" => joy1_int_n(2) <= '0'; -- Left
-										zpu_ctl_esc_ret_rldu_int(2) <= '1';
+										ctl_keys_int(2) <= '1';
 								when X"51" => joy1_int_n(1) <= '0'; -- Down
-										zpu_ctl_esc_ret_rldu_int(1) <= '1';
+										ctl_keys_int(1) <= '1';
 								when X"52" => joy1_int_n(0) <= '0'; -- Up
-										zpu_ctl_esc_ret_rldu_int(0) <= '1';
+										ctl_keys_int(0) <= '1';
 
 								when X"62" => joy2_int_n(4) <= '0'; -- [0] (Fire)
 								when X"5e" => joy2_int_n(3) <= '0'; -- [6] (Right)
@@ -265,8 +268,8 @@ BEGIN
 
 								when X"46" => reset_button_int <= '1';	-- PrtScr
 
-								when X"47" => freezer_activate_int <= '1';	-- Scroll Lock
-								when X"4c" => freezer_activate_int <= '1';	-- Delete
+								when X"47" => ctl_keys_int(8) <= '1';	-- Scroll Lock
+								-- when X"4c" => freezer_activate_int <= '1';	-- Delete
 											
 								when others => null;
 							end case;
@@ -307,12 +310,13 @@ BEGIN
 	RESET_BUTTON <= reset_button_int;
 	
 	FKEYS <= fkeys_int;
-	FREEZER_ACTIVATE <= freezer_activate_int;
 
 	JOY1_n <= joy1_int_n;
 	JOY2_n <= joy2_int_n;
 	
-	ZPU_CTL_ESC_RET_RLDU <= zpu_ctl_esc_ret_rldu_int;
+	CTL_KEYS <= ctl_keys_int;
+
+	CTL_KEYS_PREV <= ctl_keys_prev_int;
 	
 	NEW_VNC2_MODE_N <= '0';
 	

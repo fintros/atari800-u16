@@ -19,9 +19,6 @@ PORT
 	CLK : IN STD_LOGIC;
 	RESET_N : IN STD_LOGIC;
 	
-	VGA : IN STD_LOGIC;
-	COMPOSITE_ON_HSYNC : in std_logic;
-
 	colour_enable : in std_logic;
 	doubled_enable : in std_logic;
 
@@ -32,7 +29,6 @@ PORT
 	colour_in : in std_logic_vector(7 downto 0);
 	vsync_in : in std_logic;
 	hsync_in : in std_logic;
-	csync_in : in std_logic;
 	blank_in : in std_logic;
 	
 	-- TO TV...
@@ -244,57 +240,34 @@ begin
 		port map(clk=>clk,sync_reset=>'0',data_in=>vga_hsync_start,enable=>doubled_enable,reset_n=>reset_n,data_out=>vga_hsync_end);			
 	
 	-- display
-	process(colour_reg,vsync_reg,vga_hsync_reg,hsync_reg,blank_reg,colour_in,csync_in,vsync_in,hsync_in,colour_enable,doubled_enable,vga,composite_on_hsync,buffer_select_reg,linea_out,lineb_out, scanlines_on, vga_odd_reg)
+	process(colour_reg,vsync_reg,vga_hsync_reg,hsync_reg,blank_reg,colour_in,vsync_in,hsync_in,colour_enable,doubled_enable,buffer_select_reg,linea_out,lineb_out, scanlines_on, vga_odd_reg)
 	begin	
 		colour_next <= colour_reg;
-		vsync_next <= vsync_reg;
-		hsync_next <= hsync_reg;
 		
-		if (vga = '0') then
-			-- non-vga mode - pass through
-			colour_next <= colour_in;
-			--hsync_next <= not(hsync_in or vsync_in);
-			if (composite_on_hsync = '1') then
-				--hsync_next <= not(hsync_in xor vsync_in);
-				hsync_next <= not(csync_in);
-				vsync_next <='1';
+		-- vga mode, store all inputs - then play back!			
+		if (buffer_select_reg = '0') then
+			if (scanlines_on ='1' and vga_odd_reg='1') then
+				colour_next(7 downto 4) <= linea_out(7 downto 4);
+				colour_next(3) <= '0';
+				colour_next(2 downto 0) <= linea_out(3 downto 1);
 			else
-				hsync_next <= not(hsync_in);			
-				vsync_next <= not(vsync_in);
+				colour_next <= linea_out(7 downto 0);
 			end if;
-			blank_next <= blank_reg;
-
+			blank_next <= linea_out(8) or vsync_in or vga_hsync_reg;
 		else
-			-- vga mode, store all inputs - then play back!			
-			if (buffer_select_reg = '0') then
-				if (scanlines_on ='1' and vga_odd_reg='1') then
-					colour_next(7 downto 4) <= linea_out(7 downto 4);
-					colour_next(3) <= '0';
-					colour_next(2 downto 0) <= linea_out(3 downto 1);
-				else
-					colour_next <= linea_out(7 downto 0);
-				end if;
-				blank_next <= linea_out(8);
+			if (scanlines_on ='1' and vga_odd_reg='1') then
+				colour_next(7 downto 4) <= lineb_out(7 downto 4);
+				colour_next(3) <= '0';
+				colour_next(2 downto 0) <= lineb_out(3 downto 1);
 			else
-				if (scanlines_on ='1' and vga_odd_reg='1') then
-					colour_next(7 downto 4) <= lineb_out(7 downto 4);
-					colour_next(3) <= '0';
-					colour_next(2 downto 0) <= lineb_out(3 downto 1);
-				else
-					colour_next <= lineb_out(7 downto 0);
-				end if;
-				blank_next <= lineb_out(8);
+				colour_next <= lineb_out(7 downto 0);
 			end if;
-			
-			--hsync_next <= not(vga_hsync_reg);
-			if (composite_on_hsync = '1') then
-				hsync_next <= not(vga_hsync_reg xor vsync_in);
-				vsync_next <='1';
-			else
-				hsync_next <= not(vga_hsync_reg);			
-				vsync_next <= not(vsync_in);				
-			end if;
+			blank_next <= lineb_out(8) or vsync_in or vga_hsync_reg;
 		end if;
+		
+		hsync_next <= vga_hsync_reg;			
+		vsync_next <= vsync_in;				
+		
 	end process;
 
 	-- colour palette

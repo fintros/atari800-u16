@@ -92,10 +92,9 @@ architecture rtl of atari800core_u16 is
    signal VIDEO_HS            : std_logic;
    signal VIDEO_BLANK            : std_logic;
 
-   signal VIDEO_B_RAW         : std_logic_vector(7 downto 0);
+   signal VIDEO_COLOR         : std_logic_vector(7 downto 0);
    signal VIDEO_VS_RAW        : std_logic;
    signal VIDEO_HS_RAW        : std_logic;
-   signal VIDEO_CS_RAW        : std_logic;
    signal VIDEO_BLANK_RAW     : std_logic;
 	
 
@@ -157,12 +156,12 @@ architecture rtl of atari800core_u16 is
    signal ZPU_SIO_RXD         : std_logic;
    signal ZPU_SIO_COMMAND     : std_logic;
 	
-	signal FREEZER_ACTIVATE		: std_logic;
 	signal KEYBOARD_RESET		: std_logic;
 	
    signal FKEYS : std_logic_vector(11 downto 0);
 
-	signal ZPU_CTL_ESC_RET_RLDU: std_logic_vector(5 downto 0);
+	signal CTL_KEYS: std_logic_vector(8 downto 0); -- SCRLOCK(8) & LGUI (7) & LALT (6) & ESC (5) & RET (4) & Right (3) & Left (2) & Down (1) & Up (0)
+	signal CTL_KEYS_prev: std_logic_vector(8 downto 0);
 
 	
 		-- scandoubler
@@ -229,8 +228,8 @@ port map(
 	FKEYS => FKEYS,
 	JOY1_n => JOY1_n,
 	JOY2_n => JOY2_n,
-	ZPU_CTL_ESC_RET_RLDU => ZPU_CTL_ESC_RET_RLDU,
-	FREEZER_ACTIVATE => FREEZER_ACTIVATE,
+	CTL_KEYS => CTL_KEYS,
+	CTL_KEYS_PREV => OPEN,
 	NEW_VNC2_MODE_N => USB_VNC_MODE_N,
 	NEW_FRAME => USB_NEWFRAME
 	--DEBUG1 => debug1,
@@ -244,14 +243,17 @@ port map(
 		if (reset = '1') then
 			half_scandouble_enable_reg <= '0';
 			scanlines_reg <= '0';
+			CTL_KEYS_PREV <= (others=>'0');
 		elsif (ATARI_CLK'event and ATARI_CLK='1') then
 			half_scandouble_enable_reg <= half_scandouble_enable_next;
-			scanlines_reg <= scanlines_next;
+			scanlines_reg <= scanlines_reg xor (CTL_KEYS(6) and not(CTL_KEYS_PREV(6))); -- left alt
+			CTL_KEYS_PREV <= CTL_KEYS;
 		end if;
 	end process;
 
 	half_scandouble_enable_next <= not(half_scandouble_enable_reg);
-	scanlines_next <= scanlines_reg xor '0'; --(not(ps2_keys(16#11#)) and ps2_keys_next(16#11#)); -- left alt
+	--scanlines_next <= scanlines_reg xor (CTL_KEYS(6) and not(CTL_KEYS_PREV(6))); -- left alt
+	--scandouble_next <= scandouble_reg xor (CTL_KEYS(7) and not(CTL_KEYS_PREV(7))); -- left gui
 
 	scandoubler1: entity work.scandoubler_hdmi
 	GENERIC MAP
@@ -263,19 +265,15 @@ port map(
 		CLK => ATARI_CLK,
 		RESET_N => not reset,
 		
-		VGA => '1',
-		COMPOSITE_ON_HSYNC => '0',
-
 		colour_enable => half_scandouble_enable_reg,
-		doubled_enable => '1',
+		doubled_enable => '1', 
 		scanlines_on => scanlines_reg,
 		
 		-- GTIA interface
 		pal => PAL,
-		colour_in => VIDEO_B_RAW,
+		colour_in => VIDEO_COLOR,
 		vsync_in => VIDEO_VS_RAW,
 		hsync_in => VIDEO_HS_RAW,
-		csync_in => VIDEO_CS_RAW,
 		blank_in => VIDEO_BLANK_RAW,
 		
 		-- TO TV...
@@ -299,8 +297,8 @@ port map(
 	G			=> VIDEO_G,
 	B			=> VIDEO_B,
 	BLANK			=> VIDEO_BLANK,
-	HSYNC			=> VIDEO_HS,
-	VSYNC			=> VIDEO_VS,
+	HSYNC			=> not VIDEO_HS,
+	VSYNC			=> not VIDEO_VS,
 	AUX			=> "000000000000",
 	TMDS_D0			=> HDMI_D0,
 	TMDS_D1			=> HDMI_D1,
@@ -333,7 +331,7 @@ generic map(
    CYCLE_LENGTH               => 32,
    INTERNAL_ROM               => 1, -- 0
    INTERNAL_RAM               => 0, -- 16384
-   PALETTE                    => 0, -- 1
+   PALETTE                    => 0, -- everything in VIDEO_B
    VIDEO_BITS                 => 8)
 	
 port map(
@@ -342,10 +340,10 @@ port map(
 	
    VIDEO_VS                   => VIDEO_VS_RAW,
    VIDEO_HS                   => VIDEO_HS_RAW,
-   VIDEO_CS                   => VIDEO_CS_RAW,
-   VIDEO_B                    => VIDEO_B_RAW,
-   VIDEO_G                    => OPEN, -- VIDEO_G,
-   VIDEO_R                    => OPEN, --VIDEO_R,
+   VIDEO_CS                   => OPEN,
+   VIDEO_B                    => VIDEO_COLOR,
+   VIDEO_G                    => OPEN,
+   VIDEO_R                    => OPEN,
    VIDEO_BLANK                => VIDEO_BLANK_RAW,
    VIDEO_BURST                => OPEN,
    VIDEO_START_OF_FIELD       => OPEN,
@@ -396,7 +394,7 @@ port map(
    THROTTLE_COUNT_6502        => SPEED_6502,
    EMULATED_CARTRIDGE_SELECT  => EMULATED_CARTRIDGE_SELECT,
    FREEZER_ENABLE             => FREEZER_ENABLE,
-   FREEZER_ACTIVATE           => FREEZER_ACTIVATE); 
+   FREEZER_ACTIVATE           => CTL_KEYS(8)); 
 
 	
 	
@@ -481,7 +479,7 @@ zpu: entity work.zpucore
 
 		-- external control
 		-- switches etc. sector DMA blah blah.
-		ZPU_IN1 => X"000"& "00" & ZPU_CTL_ESC_RET_RLDU & FKEYS,
+		ZPU_IN1 => X"000"& "00" & CTL_KEYS(5 downto 0) & FKEYS,
 		ZPU_IN2 => X"00000000",
 		ZPU_IN3 => X"00000000",
 		ZPU_IN4 => X"00000000",
