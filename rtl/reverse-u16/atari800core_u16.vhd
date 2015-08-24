@@ -292,7 +292,7 @@ port map(
 hdmi_out: entity work.hdmi
 port map(
 	CLK_DVI			=> CLK_HDMI_IN,
-	CLK_PIXEL		=> ATARI_CLK,
+	CLK_PIXEL		=> CLK_PIXEL_IN,
 	R			=> VIDEO_R,
 	G			=> VIDEO_G,
 	B			=> VIDEO_B,
