@@ -444,7 +444,7 @@ zpu: entity work.zpucore
 	(
 		-- standard...
 		CLK => ATARI_CLK,
-		RESET_N => not reset,
+		RESET_N => not areset or SDRAM_RESET_N,
 
 		-- dma bus master (with many waitstates...)
 		ZPU_ADDR_FETCH => DMA_ADDR_FETCH,
