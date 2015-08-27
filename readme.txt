@@ -1,3 +1,12 @@
+Atari-800 emulation for Reverse-U16 board (http://zx-pk.ru/showthread.php?t=23528)
+Ported from http://www.scrameta.net/ by AlSp (extmail _at_ alsp.net)
+
+Please use:
+	- syn/atari800core_u16_epcs16_ntsc.jic - for FPGA programming (NTSC mode emulation)
+	- syn/atari800core_u16_epcs16_pal.jic  - for FPGA programming (PAL mode emulation)
+	- vnc2/build/release/ReverseU16_VNC2.rom - for vnc2 programming
+	- sd/* - sd card content
+
 The keyboard is mapped to match an Atari 800XL physical layout(See below).
 
 Special/console keys:
@@ -13,7 +22,7 @@ F11 - Select drive 1 and cold start
 		Up - up 1 line
 		Down - down 1 line
 		Enter - select
-	Remember many titles require holding 'option'
+	Remember many titles require holding 'option' (F8)
 	Select "DIR .." to go up a directory
 	Select "DIR xxx" to go down a directory
 F12 - System settings menu
@@ -79,6 +88,10 @@ The keyboard is mapped to match an Atari 800XL physical layout.  On a UK keyboar
 		ZXCVBNM,./
 	Other:
 		Right alt = inverse video
+		ScrLock  = activate turbo freezer emulation
+
+Joysticks support
+	Please use USB HID joysticks or Up,Down,Left,Up + Left Ctrl as first joystick and Num Pad ('0' is fire) as second
 
 
 Features
