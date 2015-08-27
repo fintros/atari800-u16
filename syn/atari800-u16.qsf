@@ -177,6 +177,9 @@ set_location_assignment PIN_50 -to USB_NEWFRAME
 set_location_assignment PIN_51 -to USB_VNC_MODE_N
 
 
+set_location_assignment PIN_112 -to HDMI_CLK_N
+set_global_assignment -name QIP_FILE "../rtl/reverse-u16/pll/pal_pll.qip"
+set_global_assignment -name QIP_FILE "../rtl/reverse-u16/pll/ntsc_pll.qip"
 set_global_assignment -name VHDL_FILE "../rtl/reverse-u16/hdmi/scandoubler_hdmi.vhdl"
 set_global_assignment -name VHDL_FILE "../rtl/reverse-u16/hdmi/scandouble_ram_infer_9.vhdl"
 set_global_assignment -name VHDL_FILE "../rtl/reverse-u16/vnc2/vnc2hid.vhd"
@@ -186,7 +189,6 @@ set_global_assignment -name VHDL_FILE "../rtl/reverse-u16/hdmi/hdmi.vhd"
 set_global_assignment -name VHDL_FILE "../rtl/reverse-u16/hdmi/encoder.vhd"
 set_global_assignment -name VHDL_FILE "../rtl/reverse-u16/dac/dac.vhd"
 set_global_assignment -name VHDL_FILE "../rtl/reverse-u16/zpu_rom.vhdl"
-set_global_assignment -name QIP_FILE "../rtl/reverse-u16/main_pll.qip"
 set_global_assignment -name VHDL_FILE "../rtl/reverse-u16/atari800core_u16.vhd"
 set_global_assignment -name VHDL_FILE ../rtl/common/zpu/zpupkg.vhd
 set_global_assignment -name VHDL_FILE ../rtl/common/zpu/zpucore.vhd

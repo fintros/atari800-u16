@@ -1,4 +1,4 @@
-PLL_Name	main_pll:pll|altpll:altpll_component|main_pll_altpll:auto_generated|pll1
+PLL_Name	ntsc_pll:\pll_ntsc:main_pll|altpll:altpll_component|ntsc_pll_altpll1:auto_generated|pll1
 PLLJITTER	NA
 PLLSPEmax	84
 PLLSPEmin	-53

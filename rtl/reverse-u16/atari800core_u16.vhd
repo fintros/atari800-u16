@@ -5,7 +5,10 @@ use IEEE.numeric_std.all;
 
 
 entity atari800core_u16 is
-
+generic
+(
+	TV : integer := 0  -- 1 = PAL, 0=NTSC
+);
 port (
 	-- Clock (50MHz)
 	CLK_50			: in std_logic;
@@ -37,6 +40,7 @@ port (
 	HDMI_D1N		: out std_logic := '0';
 	HDMI_D2			: out std_logic;
 	HDMI_CLK		: out std_logic;
+	-- HDMI_CLK_N		: out std_logic := '0';
 	-- SD/MMC Memory Card
 --	SD_DET_N		: in std_logic;
 	SD_SO			: in std_logic;
@@ -71,18 +75,23 @@ end atari800core_u16;
 
 architecture rtl of atari800core_u16 is
 
+   signal CLK_50_1           : std_logic;
+   signal CLK_50_2           : std_logic;
    signal ATARI_CLK           : std_logic;
-
 	signal CLK_SDRAM_IN        : std_logic;
 	signal CLK_HDMI_IN         : std_logic;
 	signal CLK_PIXEL_IN        : std_logic;
 
+   signal ATARI_CLK_PAL       : std_logic;
+   signal ATARI_CLK_NTSC      : std_logic;
 	
    signal reset               : std_logic;
    signal areset              : std_logic;
    signal cpu_reset           : std_logic;
 
    signal PLL_LOCKED          : std_logic;
+   signal PLL_LOCKED_PRE      : std_logic;
+   signal PLL_LOCKED_POST     : std_logic;
 
 	   -- Video
    signal VIDEO_R             : std_logic_vector(7 downto 0);
@@ -185,7 +194,7 @@ architecture rtl of atari800core_u16 is
 begin 
 
 -- choose mode of target atari
-PAL <= '1';
+PAL <= '1' when TV=1 else '0';
 
 areset		<= not USB_RESET_N;			  				   								-- global reset
 reset			<= areset or RESET_ATARI or not PLL_LOCKED or not SDRAM_RESET_N;	-- hot reset
@@ -203,16 +212,31 @@ ASDO <= 'Z';
 -- do not use ETHERNET
 ETH_CS_N <= 'Z';
 
-pll: entity work.main_pll
-port map (
-	inclk0 	=> CLK_50,
-	c0			=> ATARI_CLK,			-- 56.75
-	c1			=> CLK_SDRAM_IN,		-- 113.5
-	c2			=> SDRAM_CLK,			-- 113.5 (shifted)
-	c3			=> CLK_HDMI_IN,		-- 283.750 -- 141.875
-	c4			=> CLK_PIXEL_IN,		-- 28.375
-	locked	=> PLL_LOCKED
-);
+pll_pal: if TV=1 generate
+	main_pll: entity work.pal_pll 
+	port map (
+		inclk0 	=> CLK_50,
+		c0			=> ATARI_CLK,			-- 56.64 (1.77 * 32)
+		c1			=> CLK_SDRAM_IN,		-- 113.28
+		c2			=> SDRAM_CLK,			-- 113.28 (shifted)
+		c3			=> CLK_HDMI_IN,		-- 141.6 (pixel clock * 5)
+		c4			=> CLK_PIXEL_IN,		-- 28.32
+		locked	=> PLL_LOCKED
+	);
+end generate;
+
+pll_ntsc: if TV=0 generate
+	main_pll: entity work.ntsc_pll 
+	port map (
+		inclk0 	=> CLK_50,
+		c0			=> ATARI_CLK,			-- 57.28 (1.79 * 32)
+		c1			=> CLK_SDRAM_IN,		-- 114.56
+		c2			=> SDRAM_CLK,			-- 113.56 (shifted)
+		c3			=> CLK_HDMI_IN,		-- 143.2 (pixel clock * 5)
+		c4			=> CLK_PIXEL_IN,		-- 28.64
+		locked	=> PLL_LOCKED
+	);
+end generate;
 
 hid: entity work.vnc2hid
 port map(
@@ -247,6 +271,7 @@ port map(
 		elsif (ATARI_CLK'event and ATARI_CLK='1') then
 			half_scandouble_enable_reg <= half_scandouble_enable_next;
 			scanlines_reg <= scanlines_reg xor (CTL_KEYS(6) and not(CTL_KEYS_PREV(6))); -- left alt
+			--PAL <= PAL xor (CTL_KEYS(7) and not(CTL_KEYS_PREV(7))); -- left GUI
 			CTL_KEYS_PREV <= CTL_KEYS;
 		end if;
 	end process;
@@ -329,7 +354,7 @@ port map (
 atari800_core : entity work.atari800core_simple_sdram
 generic map(
    CYCLE_LENGTH               => 32,
-   INTERNAL_ROM               => 1, -- 0
+   INTERNAL_ROM               => 1, -- lets use internal rom to skip sd card rom files
    INTERNAL_RAM               => 0, -- 16384
    PALETTE                    => 0, -- everything in VIDEO_B
    VIDEO_BITS                 => 8)

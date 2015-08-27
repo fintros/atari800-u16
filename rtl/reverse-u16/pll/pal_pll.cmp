@@ -14,7 +14,7 @@
 --agreement for further details.
 
 
-component main_pll
+component pal_pll
 	PORT
 	(
 		inclk0		: IN STD_LOGIC  := '0';
