@@ -9,9 +9,7 @@ entity uart_deserializer is
 		nRESET	 : in  std_logic;
 		RX			 : in  std_logic;
 		DATA		 : out std_logic_vector(7 downto 0);
-		BYTE_READY: out std_logic;
-		NEW_FRAME:  in std_logic;
-		FIRST_BYTE: out std_logic
+		BYTE_READY: out std_logic
 	);
 end uart_deserializer;
 
@@ -23,8 +21,6 @@ architecture rtl of uart_deserializer is
 	signal rx_avail		: std_logic;
 	signal rx_shift_reg	: std_logic_vector(7 downto 0);
 	signal rx_bit		: std_logic;
-	signal prev_nf		: std_logic;
-	signal fbyte		: std_logic;
 	
 begin
 
@@ -35,17 +31,9 @@ begin
 		rx_bit_count 	<= 0;
 		rx_count 	<= 0;
 		rx_avail 	<= '0';
-		prev_nf 	<= '0';
-		fbyte		<= '0';
 		
      elsif CLK'event and CLK = '1' then
-		
-		prev_nf <= NEW_FRAME;
-		
-		if(prev_nf = '0' and NEW_FRAME = '1') then
-			fbyte <= '1';		
-		end if;
-	  
+		 
 		if rx_count /= 0 then 
 			rx_count <= rx_count - 1;
 		else
@@ -81,7 +69,6 @@ begin
 		end if;
 
 		if rx_avail = '1' then
-			fbyte <= '0';
 			rx_avail <= '0';
 		end if;
 	end if;
@@ -98,6 +85,5 @@ end process;
 
 DATA  <= rx_shift_reg;
 BYTE_READY <= rx_avail;
-FIRST_BYTE <= fbyte;
 
 end rtl;

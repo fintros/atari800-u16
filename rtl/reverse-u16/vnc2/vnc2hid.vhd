@@ -61,6 +61,14 @@ ARCHITECTURE vhdl OF vnc2hid IS
 	signal joy_int_n_new: std_logic_vector(4 downto 0);
 	signal ctl_keys_int: std_logic_vector(8 downto 0);
 	signal ctl_keys_prev_int: std_logic_vector(8 downto 0);
+	
+	signal consol_start_joy_int : std_logic;
+	signal consol_select_joy_int : std_logic;
+	signal consol_option_joy_int : std_logic;
+	signal reset_button_joy_int : std_logic;
+	signal joy_button_f11_int : std_logic;
+	signal joy_button_f12_int : std_logic;
+
 
 	signal debug: std_logic;
 	signal debug_2: std_logic;
@@ -71,8 +79,6 @@ ARCHITECTURE vhdl OF vnc2hid IS
 	signal frame_signal_prev: std_logic;
 	
 	signal port_selector: std_logic;
-	
-	signal first_byte: std_logic;
 	
 	signal device_id: std_logic_vector(3 downto 0);
 	
@@ -85,12 +91,10 @@ BEGIN
 		nRESET   => RESET_N,
 		RX       => USB_TX,
 		DATA     => keyb_data,
-		BYTE_READY => byte_ready,
-		NEW_FRAME => NEW_FRAME,
-		FIRST_BYTE => first_byte
+		BYTE_READY => byte_ready
 		);
 	
-	process (RESET_N, first_byte, byte_ready, keyb_data)
+	process (RESET_N, NEW_FRAME, byte_ready )
 	begin
 	
 		if RESET_N = '0' then
@@ -102,6 +106,12 @@ BEGIN
 					consol_select_int <= '0';
 					consol_option_int <= '0';
 					reset_button_int <= '0';
+					consol_start_joy_int <= '0';
+					consol_select_joy_int <= '0';
+					consol_option_joy_int <= '0';
+					reset_button_joy_int <= '0';
+					joy_button_f11_int <= '0';
+					joy_button_f12_int <= '0';
 					joy1_int_n <= (others=>'1');
 					joy2_int_n <= (others=>'1');
 					joy_int_n_new <= (others=>'1');
@@ -113,13 +123,15 @@ BEGIN
 					device_id <= (others=>'0');								
 					--debug <= '0';
 					--debug_2 <= '0';
-							
+		elsif NEW_FRAME = '0' then 
+					byte_count <= 0;
+		
 		elsif byte_ready'event and byte_ready = '1' then
 		   -- debug <= not debug;
 			
-			if first_byte = '1' then 	
-					byte_count <= 0;
-					debug_2 <= '1';					
+			if byte_count = 0 then 	
+					byte_count <= 1;
+					-- debug_2 <= '1';					
 					port_selector <= keyb_data(7);
 					device_id <= keyb_data(3 downto 0);
 					case keyb_data(3 downto 0) is
@@ -137,7 +149,13 @@ BEGIN
 							fkeys_int <= (others=>'0');			
 							joy1_int_n <= (others=>'1');
 							joy2_int_n <= (others=>'1');
-						when x"4" => 
+						when x"4" => 					
+							consol_start_joy_int <= '0';
+							consol_select_joy_int <= '0';
+							consol_option_joy_int <= '0';
+							reset_button_joy_int <= '0';
+							joy_button_f11_int <= '0';
+							joy_button_f12_int <= '0';
 							joy_int_n_new <= (others=>'1');
 						when others => null;
 					end case;
@@ -146,15 +164,22 @@ BEGIN
 				--debug_2 <= '0'; 
 				case device_id is
 					when x"4" => 					-- joystick
-						if(byte_count = 3) then	-- left/right						
+						if(byte_count = 4) then	-- left/right						
 								joy_int_n_new(3) <= not keyb_data(7); -- (Right)
 								joy_int_n_new(2) <= keyb_data(6); -- (Left)						
-						elsif (byte_count = 4) then -- up/down
+						elsif (byte_count = 5) then -- up/down
 								joy_int_n_new(1) <= not keyb_data(7); -- (Up)
 								joy_int_n_new(0) <= keyb_data(6); -- (Down)
-						elsif (byte_count = 5) then -- buttons
+						elsif (byte_count = 6) then -- buttons
 								joy_int_n_new(4) <= not (keyb_data(7) or keyb_data(6) or keyb_data(5) or keyb_data(4)); -- (Fire)					
-						elsif (byte_count = 7) then -- write
+						elsif (byte_count = 7) then -- control buttons 
+							consol_start_joy_int <= keyb_data(5); -- Key 10
+							consol_select_joy_int <= keyb_data(4); -- Key 9
+							consol_option_joy_int <= keyb_data(2); -- L2
+							reset_button_joy_int <= keyb_data(3); -- R2
+							joy_button_f11_int <= keyb_data(0); -- L1
+							joy_button_f12_int <= keyb_data(1); -- R1
+						elsif (byte_count = 8) then -- write
 							if(port_selector = '0') then								
 									joy1_int_n <= joy_int_n_new;
 							else 
@@ -162,7 +187,7 @@ BEGIN
 							end if;
 						end if;
 					when x"6" => -- keyboard				
-						if byte_count = 0 then 
+						if byte_count = 1 then 
 								control_pressed  <= keyb_data(4); -- CTRL
 								shift_pressed <= keyb_data(1) or keyb_data(5); -- Shifts
 								atari_keyboard(39) <= keyb_data(6); -- Right Alt (Inv)				
@@ -303,13 +328,14 @@ BEGIN
 			end if;
 	end process;		 
 
-	-- outputs
-	CONSOL_START <= consol_start_int;
-	CONSOL_SELECT <= consol_select_int;
-	CONSOL_OPTION <= consol_option_int;
-	RESET_BUTTON <= reset_button_int;
 	
-	FKEYS <= fkeys_int;
+	-- outputs
+	CONSOL_START <= consol_start_int or consol_start_joy_int;
+	CONSOL_SELECT <= consol_select_int or consol_select_joy_int;
+	CONSOL_OPTION <= consol_option_int or consol_option_joy_int;
+	RESET_BUTTON <= reset_button_int or reset_button_joy_int;
+	
+	FKEYS <= (fkeys_int(11) or joy_button_f12_int) & (fkeys_int(10) or joy_button_f11_int) & fkeys_int(9 downto 0);
 
 	JOY1_n <= joy1_int_n;
 	JOY2_n <= joy2_int_n;
